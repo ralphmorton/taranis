@@ -47,7 +47,12 @@ exports.remove_ = function(client) {
   return function(opts) {
     return function(uri) {
       return function() {
-        client.remove(uri, opts)
+        let torrent = client.torrents.filter(function(torrent) {
+          let torrentUri = torrent.originalMagnetUri || torrent.magnetURI
+          return torrentUri == uri
+         })
+
+        client.remove(torrent.originalMagnetUri || uri, opts)
       }
     }
   }
