@@ -1,105 +1,26 @@
 
-module Backend.Web.Server where
+module Backend.Web.Server (
+  module Common.Web.Api,
+  class Server,
+  Handler,
+  HandlerError(..),
+  handle
+) where
 
-import Prelude
+import Prelude (class Monad, bind, discard, pure, (&&), (<<<), (<=<), (=<<), (==))
 
 import Control.Alt ((<|>))
 import Control.Monad.Except.Trans (ExceptT, runExceptT)
 import Control.MonadZero (guard)
 import Data.Array (drop, head, null)
 import Data.Either (Either(..))
-import Data.Int as Int
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.String (toLower)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Foreign (Foreign)
 import Simple.JSON (class ReadForeign, class WriteForeign, read_, write)
 
---
-
-data Proxy p = Proxy
-
---
-
-data Method
-  = Get
-  | Post
-  | Delete
-  | Put
-  | Patch
-  | CustomVerb String
-
-derive instance eqMethod :: Eq Method
-
-data Get
-data Post
-data Delete
-data Put
-data Patch
-data CustomVerb (s :: Symbol)
-
---
-
-type Request = {
-  method :: Method,
-  path :: Array String,
-  queryParams :: Map.Map String String,
-  headers :: Map.Map String String,
-  body :: Maybe Foreign
-}
-
-type Response = {
-  statusCode :: Int,
-  body :: Foreign
-}
-
---
-
-data Cons a b
-infixr 5 type Cons as :>
-
-data Or a b = Or a b
-infixr 4 type Or as :<|>
-
-or :: forall a b. a -> b -> Or a b
-or = Or
-
-infixr 4 or as :<|>
-
---
-
-class ReflectMethod m where
-  reflectMethod :: forall p. p m -> Method
-
-instance reflectMethodGet :: ReflectMethod Get where
-  reflectMethod _ = Get
-
-instance reflectMethodPost :: ReflectMethod Post where
-  reflectMethod _ = Post
-
-instance reflectMethodDelete :: ReflectMethod Delete where
-  reflectMethod _ = Delete
-
-instance reflectMethodPut :: ReflectMethod Put where
-  reflectMethod _ = Put
-
-instance reflectMethodPatch :: ReflectMethod Patch where
-  reflectMethod _ = Patch
-
-instance reflectMethodCustom :: IsSymbol s => ReflectMethod (CustomVerb s) where
-  reflectMethod _ = CustomVerb (reflectSymbol (SProxy :: SProxy s))
-
---
-
-class FromRequestParam p where
-  fromRequestParam :: String -> Maybe p
-
-instance fromRequestParamString :: FromRequestParam String where
-  fromRequestParam = pure <<< identity
-
-instance fromRequestParamInt :: FromRequestParam Int where
-  fromRequestParam = Int.fromString
+import Common.Web.Api
 
 --
 
@@ -119,9 +40,7 @@ data HandlerError = HandlerError {
 
 --
 
-data Verb v a
-
-instance serverVerb :: (ReflectMethod v, WriteForeign a, Monad m) => Server m (Verb v a) (ExceptT HandlerError m a) where
+instance serverVerb :: (ReflectMethod v, WriteForeign a, Monad m) => Server m (Verb n v a) (ExceptT HandlerError m a) where
   handle _ f req = do
     let verbMethod = reflectMethod (Proxy :: Proxy v)
     let requestValid = req.method == verbMethod && null req.path
@@ -145,8 +64,6 @@ verbResponse m = do
 
 --
 
-data Lit (s :: Symbol)
-
 instance serverLit :: (IsSymbol s, Server m b f) => Server m (Lit s :> b) f where
   handle _ f req = do
     pathPref <- head req.path
@@ -160,18 +77,14 @@ instance serverOr :: (Server m a f, Server m b g) => Server m (a :<|> b) (f :<|>
 
 --
 
-data Capture a
-
-instance serverCapture :: (FromRequestParam a, Server m b f) => Server m (Capture a :> b) (a -> f) where
+instance serverCapture :: (RequestParam a, Server m b f) => Server m (Capture a :> b) (a -> f) where
   handle _ f req = do
     a <- (fromRequestParam <=< head) req.path
     handle (Proxy :: Proxy b) (f a) (req { path = drop 1 req.path })
 
 --
 
-data QueryParam (s :: Symbol) a
-
-instance serverQueryParam :: (IsSymbol s, FromRequestParam a, Server m b f) => Server m (QueryParam s a :> b) (a -> f) where
+instance serverQueryParam :: (IsSymbol s, RequestParam a, Server m b f) => Server m (QueryParam s a :> b) (a -> f) where
   handle _ f req = do
     let label = reflectSymbol (SProxy :: SProxy s)
     a <- (fromRequestParam <=< Map.lookup label) req.queryParams
@@ -179,16 +92,12 @@ instance serverQueryParam :: (IsSymbol s, FromRequestParam a, Server m b f) => S
 
 --
 
-data Body a
-
 instance serverBody :: (ReadForeign a, Server m b f) => Server m (Body a :> b) (a -> f) where
   handle _ f req = do
     a <- read_ =<< req.body
     handle (Proxy :: Proxy b) (f a) (req { body = Nothing })
 
 --
-
-data Header (s :: Symbol)
 
 instance serverHeader :: (IsSymbol s, Server m b f) => Server m (Header s :> b) (String -> f) where
   handle _ f req = do

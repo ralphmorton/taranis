@@ -24,7 +24,7 @@ import Common.Wire.GetTorrentResponse (GetTorrentResponse(..), TorrentDirectory,
 
 --
 
-type Api = Lit "api" :> Lit "torrent" :> Capture String :> Verb Get GetTorrentResponse
+type Api = Lit "api" :> Lit "torrent" :> Capture String :> Verb "getTorrent" Get GetTorrentResponse
 
 --
 
