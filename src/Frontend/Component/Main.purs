@@ -6,7 +6,6 @@ module Frontend.Component.Main (
 import Prelude
 
 import Affjax.RequestHeader (RequestHeader(..))
-import Control.Alt ((<|>))
 import Data.Array (any)
 import Data.Either (Either(..))
 import Data.Int (floor)
@@ -22,15 +21,15 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.HTML.Properties.ARIA as HPA
 import Simple.Ajax (AjaxError, getR)
-import Simple.JSON (class ReadForeign, read')
 
 import Common.Data.Base64Url as B64
+import Common.Wire.GetTorrentResponse as W
 
 --
 
 type State = {
   magnetUri :: String,
-  files :: Array File,
+  files :: Array W.TorrentFile,
   stage :: Stage
 }
 
@@ -38,24 +37,19 @@ data Stage
   = Ready
   | Loading Progress
   | Loaded
-  | Playing File
+  | Playing W.TorrentFile
   | Error String
 
 data Progress
   = Downloading Number
   | Preparing
 
-type File = {
-  fileName :: String,
-  url :: String
-} 
-
 --
 
 data Action
   = SetMagnetUri String
   | Load
-  | Play File
+  | Play W.TorrentFile
   | SetStage Stage
   | SetError String
 
@@ -135,7 +129,7 @@ renderLoading Preparing = renderWrapper Nothing $
       []
   ]
 
-renderLoaded :: forall m. Array File -> H.ComponentHTML Action () m
+renderLoaded :: forall m. Array W.TorrentFile -> H.ComponentHTML Action () m
 renderLoaded files = renderWrapper (pure header) content
   where
   header =
@@ -193,7 +187,7 @@ videoSuffixes = [
 hasSuffix :: String -> String -> Boolean
 hasSuffix suffix str = isJust $ stripSuffix (wrap $ toLower suffix) (toLower str)
 
-renderPlaying :: forall m. File -> H.ComponentHTML Action () m
+renderPlaying :: forall m. W.TorrentFile -> H.ComponentHTML Action () m
 renderPlaying { url } = renderWrapper (pure header) content
   where
   header =
@@ -261,21 +255,14 @@ requestTorrent magnetUri = do
   let opts = { headers: [Accept applicationJSON, ContentType applicationJSON] }
   base64 <- B64.encode magnetUri
   let path = "/api/torrent/" <> base64
-  res <- (liftAff (getR opts path) :: H.HalogenM State Action () o m (Either AjaxError TorrentResponse))
+  res <- (liftAff (getR opts path) :: H.HalogenM State Action () o m (Either AjaxError W.GetTorrentResponse))
   case res of
     Left err ->
       H.modify_ (_ { stage = Error (show err) })
-    Right (TorrentProgress { progress }) -> do
+    Right (W.Downloading { progress }) -> do
       let p = if progress == 1.0 then Preparing else (Downloading progress)
       H.modify_ (_ { stage = Loading p })
       (liftAff <<< delay) (wrap 1000.0)
       requestTorrent magnetUri
-    Right (TorrentDirectory { files: fx }) ->
+    Right (W.Available { files: fx }) ->
       H.modify_ (_ { files = fx, stage = Loaded } )
-
-data TorrentResponse
-  = TorrentProgress { progress :: Number }
-  | TorrentDirectory { files :: Array File }
-
-instance readForeignTorrentResponse :: ReadForeign TorrentResponse where
-  readImpl f = (TorrentProgress <$> read' f) <|> (TorrentDirectory <$> read' f)

@@ -12,7 +12,6 @@ import Control.Monad.Trans.Class (lift)
 import Data.Maybe (Maybe(..))
 import Effect.Aff (Fiber)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Simple.JSON (class WriteForeign, write)
 
 import Backend.Arbiter.Common (sha256Hex, cacheTtlSeconds)
 import Backend.Arbiter.Storage (listTorrentBlobUrls, runGarbageCollectorDaemon, storeTorrent)
@@ -21,31 +20,7 @@ import Backend.Network.Redis as R
 import Backend.Network.Torrent as T
 import Backend.Web.Server (type (:>), Capture, Get, Handler, Lit, Proxy(..), Request, Response, Verb, handle)
 import Common.Data.Base64Url as B64
-
---
-
-data GetTorrentResponse
-  = Available TorrentDirectory
-  | Downloading TorrentProgress
-
-type TorrentDirectory = {
-  files :: Array TorrentAccessInfo
-}
-
-type TorrentAccessInfo = {
-  fileName :: String,
-  url :: String
-}
-
-type TorrentProgress = {
-  progress :: Number
-}
-
-instance writeForeignGetTorrentResponse :: WriteForeign GetTorrentResponse where
-  writeImpl (Available dir) =
-    write dir
-  writeImpl (Downloading prog) =
-    write prog
+import Common.Wire.GetTorrentResponse (GetTorrentResponse(..), TorrentDirectory, TorrentProgress)
 
 --
 
