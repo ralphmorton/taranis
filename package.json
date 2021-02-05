@@ -1,0 +1,43 @@
+{
+  "name": "taranis",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "rm -rf dce-output && spago build --purs-args '--codegen corefn,js' && zephyr -f Frontend.main && spago bundle-app --main Backend --to ./dist/backend/index.js && rm -rf ./dist/frontend/ && parcel build ./static/index.html --out-dir ./dist/frontend/",
+    "start": "node ./dist/backend/index.js",
+    "test": "spago test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ralphmorton/taranis.git"
+  },
+  "author": "Ralph Morton",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ralphmorton/taranis/issues"
+  },
+  "homepage": "https://github.com/ralphmorton/taranis#readme",
+  "dependencies": {
+    "@azure/storage-blob": "^12.4.0",
+    "base64url": "^3.0.1",
+    "bcrypt": "^5.0.0",
+    "fastify": "^3.11.0",
+    "fastify-static": "^3.4.0",
+    "ioredis": "^4.19.4",
+    "mongodb": "^3.6.3",
+    "uuid": "^8.3.2",
+    "webtorrent": "^0.112.2"
+  },
+  "engines": {
+    "node": "10.x"
+  },
+  "devDependencies": {
+    "parcel": "^1.12.4",
+    "purescript": "^0.13.8",
+    "spago": "^0.19.0"
+  }
+}
